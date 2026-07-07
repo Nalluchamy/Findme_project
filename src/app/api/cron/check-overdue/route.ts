@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     for (const parcel of activeParcels) {
       const latestEvent = parcel.ledgerEvents[0];
       if (latestEvent && latestEvent.timestamp < cutOffDate) {
-        await db.$transaction(async (tx) => {
+        await db.$transaction(async (tx: any) => {
           await tx.ledgerEvent.create({
             data: {
               parcelId: parcel.id,
