@@ -58,6 +58,7 @@ interface Parcel {
 }
 
 export default function FindMeApp() {
+  const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -80,6 +81,7 @@ export default function FindMeApp() {
   const [actionTargetUser, setActionTargetUser] = useState('');
 
   useEffect(() => {
+    setMounted(true);
     // Unregister any old service workers immediately to prevent stale caching
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -249,8 +251,27 @@ export default function FindMeApp() {
 
   const selectedParcel = parcels.find(p => p.id === selectedParcelId);
 
+  // Show neutral loading screen until client mounts (prevents hydration mismatch)
+  if (!mounted || isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="bg-[var(--color-primary)] text-white p-4 rounded-2xl shadow-xl shadow-blue-500/20">
+            <Package className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">Courier Connect</h1>
+          <div className="flex gap-1 mt-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-bounce" style={{animationDelay:'0ms'}}></div>
+            <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-bounce" style={{animationDelay:'150ms'}}></div>
+            <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-bounce" style={{animationDelay:'300ms'}}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // LOGIN SCREEN
-  if (!user && !isAuthLoading) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-white text-slate-900 flex flex-col justify-center items-center px-6 py-12">
         <div className="w-full max-w-sm">
