@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
     }
     
     const { username, password } = parsed.data;
+    const normalizedUsername = username.trim().toLowerCase();
     
     const user = await db.user.findUnique({
-      where: { username },
+      where: { username: normalizedUsername },
     });
     
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
