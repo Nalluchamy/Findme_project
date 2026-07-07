@@ -13,9 +13,10 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is not set in environment variables');
 }
 
-export const pool = globalForPrisma.pool ?? new Pool({ connectionString });
-if (process.env.NODE_ENV !== 'production') globalForPrisma.pool = pool;
+// Always reuse pool across requests to prevent "calling client.query() on a pool" warning
+export const pool = globalForPrisma.pool ?? new Pool({ connectionString, max: 3 });
+globalForPrisma.pool = pool;
 
 const adapter = new PrismaPg(pool);
 export const db = globalForPrisma.prisma ?? new PrismaClient({ adapter });
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
+globalForPrisma.prisma = db;
