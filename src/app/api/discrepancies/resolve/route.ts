@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Parcel not found' }, { status: 404 });
     }
 
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: any) => {
       await tx.ledgerEvent.create({
         data: {
           parcelId,
