@@ -391,7 +391,7 @@ export default function FindMeApp() {
                   <Wallet className="w-4 h-4 text-[var(--color-primary)]" />
                 </div>
                 <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  ₹{parcels.filter(p => p.currentState === 'HANDOVER_TO_ORIGIN_BRANCH').reduce((acc, p) => acc + p.codAmount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{parcels.filter(p => p.currentState === 'HANDOVER_TO_ORIGIN_BRANCH').reduce((acc, p) => acc + Number(p.codAmount), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-[var(--color-primary)] font-medium mt-1 flex items-center gap-1">
                   <Clock className="w-3 h-3" /> Expected by Friday, Oct 27
@@ -404,7 +404,7 @@ export default function FindMeApp() {
                   <CreditCard className="w-4 h-4 text-slate-400" />
                 </div>
                 <div className="text-xl font-bold text-slate-900 tracking-tight">
-                  ₹{parcels.filter(p => p.currentState === 'SETTLED_TO_SELLER').reduce((acc, p) => acc + p.codAmount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{parcels.filter(p => p.currentState === 'SETTLED_TO_SELLER').reduce((acc, p) => acc + Number(p.codAmount), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> Transferred on Oct 20
@@ -436,7 +436,7 @@ export default function FindMeApp() {
                       <div className="text-right flex items-center gap-3">
                         <div>
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">COD Amount</div>
-                          <div className="font-bold text-sm text-[var(--color-primary)]">₹{parcel.codAmount.toFixed(2)}</div>
+                          <div className="font-bold text-sm text-[var(--color-primary)]">₹{Number(parcel.codAmount).toFixed(2)}</div>
                         </div>
                         <div className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${getBadgeStyle(parcel.currentState)}`}>
                           {getFriendlyState(parcel.currentState)}
@@ -542,7 +542,7 @@ export default function FindMeApp() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-slate-500 font-medium">Declared Value (COD)</span>
-                    <span className="text-sm font-bold text-slate-900">₹{selectedParcel.codAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold text-slate-900">₹{Number(selectedParcel.codAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-slate-500 font-medium">Creation Date</span>
@@ -556,13 +556,13 @@ export default function FindMeApp() {
             {/* Action Bar (Fixed at bottom of slide-over) */}
             <div className="absolute bottom-0 w-full bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
               {user?.role === 'DELIVERY_AGENT' && selectedParcel.currentState === 'CREATED' && (
-                <button onClick={() => handleCollect(selectedParcel.id, selectedParcel.codAmount)} className="w-full bg-[var(--color-primary)] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
-                  <DollarSign className="w-4 h-4" /> Collect ₹{selectedParcel.codAmount}
+                <button onClick={() => handleCollect(selectedParcel.id, Number(selectedParcel.codAmount))} className="w-full bg-[var(--color-primary)] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                  <DollarSign className="w-4 h-4" /> Collect ₹{Number(selectedParcel.codAmount)}
                 </button>
               )}
               
               {user?.role === 'BRANCH_STAFF' && selectedParcel.currentState === 'COD_COLLECTED' && (
-                <button onClick={() => handleHandoverConfirm(selectedParcel.id, selectedParcel.codAmount)} className="w-full bg-[var(--color-primary)] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                <button onClick={() => handleHandoverConfirm(selectedParcel.id, Number(selectedParcel.codAmount))} className="w-full bg-[var(--color-primary)] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
                   <CheckCircle className="w-4 h-4" /> Accept Handover
                 </button>
               )}
