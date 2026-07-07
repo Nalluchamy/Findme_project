@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String        @id @default(uuid())
+  username        String        @unique
+  passwordHash    String
+  name            String
+  role            Role
+  locationId      String?
+  createdAt       DateTime      @default(now())
+  initiatedEvents LedgerEvent[] @relation("InitiatedBy")
+  confirmedEvents LedgerEvent[] @relation("ConfirmedBy")
+  parcelsAsSeller Parcel[]      @relation("SellerParcels")
+  location        Location?     @relation(fields: [locationId], references: [id])
+
+  @@index([locationId])
+}
+
+model Location {
+  id              String       @id @default(uuid())
+  name            String
+  type            LocationType
+  parcelsAtDest   Parcel[]     @relation("DestParcels")
+  parcelsAtOrigin Parcel[]     @relation("OriginParcels")
+  users           User[]
+}
+
+model Parcel {
+  id                    String        @id
+  sellerId              String
+  codAmount             Decimal       @db.Decimal(10, 2)
+  originLocationId      String
+  destinationLocationId String
+  currentState          ParcelState   @default(CREATED)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  ledgerEvents          LedgerEvent[]
+  destinationLocation   Location      @relation("DestParcels", fields: [destinationLocationId], references: [id])
+  originLocation        Location      @relation("OriginParcels", fields: [originLocationId], references: [id])
+  seller                User          @relation("SellerParcels", fields: [sellerId], references: [id])
+
+  @@index([currentState])
+  @@index([createdAt])
+  @@index([sellerId])
+}
+
+model LedgerEvent {
+  id              String          @id @default(uuid())
+  parcelId        String
+  eventType       LedgerEventType
+  fromPartyId     String?
+  toPartyId       String?
+  expectedAmount  Decimal         @db.Decimal(10, 2)
+  confirmedAmount Decimal?        @db.Decimal(10, 2)
+  confirmedByFrom Boolean         @default(false)
+  confirmedByTo   Boolean         @default(false)
+  photoUrl        String?
+  gpsCoords       String?
+  timestamp       DateTime        @default(now())
+  discrepancyNote String?
+  fromParty       User?           @relation("InitiatedBy", fields: [fromPartyId], references: [id])
+  parcel          Parcel          @relation(fields: [parcelId], references: [id])
+  toParty         User?           @relation("ConfirmedBy", fields: [toPartyId], references: [id])
+
+  @@index([parcelId])
+  @@index([timestamp])
+  @@index([toPartyId])
+  @@index([fromPartyId])
+}
+
+enum Role {
+  DELIVERY_AGENT
+  BRANCH_STAFF
+  HUB_OPERATOR
+  FINANCE_OFFICER
+  SELLER
+  ADMIN
+}
+
+enum LocationType {
+  BRANCH
+  HUB
+}
+
+enum ParcelState {
+  CREATED
+  COD_COLLECTED
+  HANDOVER_TO_DEST_HUB
+  HANDOVER_TO_ORIGIN_HUB
+  HANDOVER_TO_ORIGIN_BRANCH
+  SETTLED_TO_SELLER
+  DISCREPANCY_FLAGGED
+}
+
+enum LedgerEventType {
+  COD_COLLECTED
+  HANDOVER_TO_DEST_HUB
+  HANDOVER_TO_ORIGIN_HUB
+  HANDOVER_TO_ORIGIN_BRANCH
+  SETTLED_TO_SELLER
+  DISCREPANCY_FLAGGED
+}
