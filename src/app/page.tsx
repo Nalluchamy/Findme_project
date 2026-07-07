@@ -80,6 +80,14 @@ export default function FindMeApp() {
   const [actionTargetUser, setActionTargetUser] = useState('');
 
   useEffect(() => {
+    // Unregister any old service workers immediately to prevent stale caching
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
     fetchSession();
   }, []);
 
