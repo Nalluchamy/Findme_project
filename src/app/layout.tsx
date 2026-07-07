@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "FindMe - COD Settlement Tracker",
@@ -8,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: "#0a4bfb", // Updated to the primary blue
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
@@ -25,7 +28,7 @@ export default function RootLayout({
       lang="en"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className={`min-h-full flex flex-col ${inter.className}`}>{children}</body>
     </html>
   );
 }
