@@ -156,7 +156,7 @@ export default function FindMeApp() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/me', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
-      setUser(null); setParcels([]); setSelectedParcelId(null);
+      setUser(null); setParcels([]); setSelectedParcelId(null); setActiveTab('parcels');
     } catch (e) {
       console.error(e);
     }
@@ -463,7 +463,12 @@ export default function FindMeApp() {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              {parcels.length === 0 ? (
+              {isDataLoading ? (
+                <div className="p-10 text-center flex flex-col items-center justify-center">
+                  <RefreshCw className="w-8 h-8 text-[var(--color-primary)] animate-spin mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm font-medium">Syncing shipments...</p>
+                </div>
+              ) : parcels.length === 0 ? (
                 <div className="p-10 text-center">
                   <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                   <p className="text-slate-400 text-sm font-medium">No parcels found.</p>
