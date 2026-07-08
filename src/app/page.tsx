@@ -459,14 +459,30 @@ export default function FindMeApp() {
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-[13px] font-bold text-slate-800">Active Parcels</h3>
-              <span className="text-[11px] font-semibold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-full">{parcels.length} Items</span>
+              {!isDataLoading && (
+                <span className="text-[11px] font-semibold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-full">{parcels.length} Items</span>
+              )}
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
               {isDataLoading ? (
-                <div className="p-10 text-center flex flex-col items-center justify-center">
-                  <RefreshCw className="w-8 h-8 text-[var(--color-primary)] animate-spin mx-auto mb-3" />
-                  <p className="text-slate-400 text-sm font-medium">Syncing shipments...</p>
+                <div className="divide-y divide-slate-100">
+                  {[1, 2, 3].map((skeleton) => (
+                    <div key={skeleton} className="p-4 flex items-center justify-between animate-pulse">
+                      <div>
+                        <div className="h-4 w-20 bg-slate-200 rounded mb-2"></div>
+                        <div className="h-3 w-32 bg-slate-100 rounded"></div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="h-2 w-16 bg-slate-100 rounded mb-1.5 ml-auto"></div>
+                          <div className="h-4 w-12 bg-slate-200 rounded ml-auto"></div>
+                        </div>
+                        <div className="h-5 w-16 bg-slate-100 rounded"></div>
+                        <div className="w-4 h-4 bg-slate-100 rounded-full"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : parcels.length === 0 ? (
                 <div className="p-10 text-center">
