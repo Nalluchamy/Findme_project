@@ -40,6 +40,7 @@ model Location {
 
 model Parcel {
   id                    String            @id
+  trackingNumber        String
   sellerId              String
   codAmount             Decimal           @db.Decimal(10, 2)
   originLocationId      String
@@ -51,11 +52,13 @@ model Parcel {
   updatedAt             DateTime          @updatedAt
   ledgerEvents          LedgerEvent[]
   notificationLogs      NotificationLog[]
+  receipt               Receipt?
   destinationLocation   Location          @relation("DestParcels", fields: [destinationLocationId], references: [id])
   originLocation        Location          @relation("OriginParcels", fields: [originLocationId], references: [id])
-  seller                User          @relation("SellerParcels", fields: [sellerId], references: [id])
+  seller                User              @relation("SellerParcels", fields: [sellerId], references: [id])
   company               Company?          @relation(fields: [companyId], references: [id])
 
+  @@unique([trackingNumber, carrier, companyId])
   @@index([currentState])
   @@index([createdAt])
   @@index([sellerId])
@@ -152,4 +155,14 @@ model NotificationLog {
 
   @@index([companyId])
   @@index([parcelId])
+}
+
+model Receipt {
+  id         String   @id @default(uuid())
+  parcelId   String   @unique
+  photoUrl   String
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  deviceType String?
+  parcel     Parcel   @relation(fields: [parcelId], references: [id])
 }
