@@ -18,26 +18,35 @@ async function main() {
   await prisma.parcel.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.location.deleteMany({});
+  await prisma.company.deleteMany({});
+
+  console.log('Seeding company...');
+  const company = await prisma.company.create({
+    data: {
+      name: 'FindMe Express Demo',
+      slug: 'findme-demo',
+    },
+  });
 
   console.log('Seeding locations...');
   const originBranch = await prisma.location.create({
-    data: { name: 'Delhi Origin Branch (DEL_BRANCH_1)', type: 'BRANCH' },
+    data: { name: 'Delhi Origin Branch (DEL_BRANCH_1)', type: 'BRANCH', companyId: company.id },
   });
   const originHub = await prisma.location.create({
-    data: { name: 'Delhi Hub (DEL_HUB)', type: 'HUB' },
+    data: { name: 'Delhi Hub (DEL_HUB)', type: 'HUB', companyId: company.id },
   });
   const destHub = await prisma.location.create({
-    data: { name: 'Mumbai Hub (MUM_HUB)', type: 'HUB' },
+    data: { name: 'Mumbai Hub (MUM_HUB)', type: 'HUB', companyId: company.id },
   });
   const destBranch = await prisma.location.create({
-    data: { name: 'Mumbai Destination Branch (MUM_BRANCH_1)', type: 'BRANCH' },
+    data: { name: 'Mumbai Destination Branch (MUM_BRANCH_1)', type: 'BRANCH', companyId: company.id },
   });
 
   console.log('Seeding users...');
   const passwordHash = hashPassword('password123');
 
   const seller = await prisma.user.create({
-    data: { username: 'seller', passwordHash, name: 'ElectroWorld Seller', role: 'SELLER' },
+    data: { username: 'seller', passwordHash, name: 'ElectroWorld Seller', role: 'SELLER', companyId: company.id },
   });
   const agent = await prisma.user.create({
     data: {
@@ -46,6 +55,7 @@ async function main() {
       name: 'Ramesh (Delivery Agent)',
       role: 'DELIVERY_AGENT',
       locationId: destBranch.id,
+      companyId: company.id,
     },
   });
   const branchStaffMum = await prisma.user.create({
@@ -55,6 +65,7 @@ async function main() {
       name: 'Priya (Mumbai Branch Staff)',
       role: 'BRANCH_STAFF',
       locationId: destBranch.id,
+      companyId: company.id,
     },
   });
   const hubOperatorMum = await prisma.user.create({
@@ -64,6 +75,7 @@ async function main() {
       name: 'Amit (Mumbai Hub Operator)',
       role: 'HUB_OPERATOR',
       locationId: destHub.id,
+      companyId: company.id,
     },
   });
   const hubOperatorDel = await prisma.user.create({
@@ -73,6 +85,7 @@ async function main() {
       name: 'Sunita (Delhi Hub Operator)',
       role: 'HUB_OPERATOR',
       locationId: originHub.id,
+      companyId: company.id,
     },
   });
   const branchStaffDel = await prisma.user.create({
@@ -82,13 +95,14 @@ async function main() {
       name: 'Karan (Delhi Branch Staff)',
       role: 'BRANCH_STAFF',
       locationId: originBranch.id,
+      companyId: company.id,
     },
   });
   const finance = await prisma.user.create({
-    data: { username: 'finance', passwordHash, name: 'Sanjay (Finance Officer)', role: 'FINANCE_OFFICER' },
+    data: { username: 'finance', passwordHash, name: 'Sanjay (Finance Officer)', role: 'FINANCE_OFFICER', companyId: company.id },
   });
   const admin = await prisma.user.create({
-    data: { username: 'admin', passwordHash, name: 'Super Admin', role: 'ADMIN' },
+    data: { username: 'admin', passwordHash, name: 'Super Admin', role: 'ADMIN', companyId: company.id },
   });
 
   console.log('Seeding parcels...');
@@ -102,6 +116,7 @@ async function main() {
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'CREATED',
+      companyId: company.id,
     },
   });
 
@@ -114,6 +129,7 @@ async function main() {
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'COD_COLLECTED',
+      companyId: company.id,
     },
   });
   await prisma.ledgerEvent.create({
@@ -137,10 +153,10 @@ async function main() {
       codAmount: 850.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
-      currentState: 'COD_COLLECTED', // still COD_COLLECTED until handover is fully confirmed
+      currentState: 'COD_COLLECTED',
+      companyId: company.id,
     },
   });
-  // Cash was collected
   await prisma.ledgerEvent.create({
     data: {
       parcelId: parcel3.id,
@@ -152,7 +168,6 @@ async function main() {
       confirmedByTo: true,
     },
   });
-  // Handover initiated by branch staff to destination hub operator
   await prisma.ledgerEvent.create({
     data: {
       parcelId: parcel3.id,
@@ -161,7 +176,7 @@ async function main() {
       toPartyId: hubOperatorMum.id,
       expectedAmount: 850.00,
       confirmedByFrom: true,
-      confirmedByTo: false, // waiting for Amit to confirm
+      confirmedByTo: false,
     },
   });
 
@@ -174,6 +189,7 @@ async function main() {
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'DISCREPANCY_FLAGGED',
+      companyId: company.id,
     },
   });
   await prisma.ledgerEvent.create({
@@ -187,7 +203,6 @@ async function main() {
       confirmedByTo: true,
     },
   });
-  // Failed Handover to Dest Hub
   await prisma.ledgerEvent.create({
     data: {
       parcelId: parcel4.id,
@@ -195,7 +210,7 @@ async function main() {
       fromPartyId: branchStaffMum.id,
       toPartyId: hubOperatorMum.id,
       expectedAmount: 1200.00,
-      confirmedAmount: 1000.00, // amit claims he only received 1000
+      confirmedAmount: 1000.00,
       confirmedByFrom: true,
       confirmedByTo: true,
       discrepancyNote: 'Mismatch: Handover amount was 1200, but recipient received 1000.',
@@ -220,6 +235,7 @@ async function main() {
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'SETTLED_TO_SELLER',
+      companyId: company.id,
     },
   });
   await prisma.ledgerEvent.create({

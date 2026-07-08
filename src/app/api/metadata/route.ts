@@ -9,11 +9,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const whereClause = session.companyId ? { companyId: session.companyId } : {};
+
     const locations = await db.location.findMany({
+      where: whereClause,
       orderBy: { name: 'asc' },
     });
 
     const users = await db.user.findMany({
+      where: whereClause,
       select: {
         id: true,
         username: true,

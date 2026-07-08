@@ -13,22 +13,29 @@ model User {
   name            String
   role            Role
   locationId      String?
+  companyId       String?
   createdAt       DateTime      @default(now())
   initiatedEvents LedgerEvent[] @relation("InitiatedBy")
   confirmedEvents LedgerEvent[] @relation("ConfirmedBy")
   parcelsAsSeller Parcel[]      @relation("SellerParcels")
   location        Location?     @relation(fields: [locationId], references: [id])
+  company         Company?      @relation(fields: [companyId], references: [id])
 
   @@index([locationId])
+  @@index([companyId])
 }
 
 model Location {
   id              String       @id @default(uuid())
   name            String
   type            LocationType
+  companyId       String?
   parcelsAtDest   Parcel[]     @relation("DestParcels")
   parcelsAtOrigin Parcel[]     @relation("OriginParcels")
   users           User[]
+  company         Company?     @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
 }
 
 model Parcel {
@@ -37,6 +44,7 @@ model Parcel {
   codAmount             Decimal       @db.Decimal(10, 2)
   originLocationId      String
   destinationLocationId String
+  companyId             String?
   currentState          ParcelState   @default(CREATED)
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
@@ -44,10 +52,12 @@ model Parcel {
   destinationLocation   Location      @relation("DestParcels", fields: [destinationLocationId], references: [id])
   originLocation        Location      @relation("OriginParcels", fields: [originLocationId], references: [id])
   seller                User          @relation("SellerParcels", fields: [sellerId], references: [id])
+  company               Company?      @relation(fields: [companyId], references: [id])
 
   @@index([currentState])
   @@index([createdAt])
   @@index([sellerId])
+  @@index([companyId])
 }
 
 model LedgerEvent {
@@ -105,4 +115,22 @@ enum LedgerEventType {
   HANDOVER_TO_ORIGIN_BRANCH
   SETTLED_TO_SELLER
   DISCREPANCY_FLAGGED
+}
+
+model Company {
+  id        String     @id @default(uuid())
+  name      String
+  slug      String     @unique
+  phone     String?
+  email     String?
+  address   String?
+  logoUrl   String?
+  gstNumber String?
+  panNumber String?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  users     User[]
+  locations Location[]
+  parcels   Parcel[]
 }

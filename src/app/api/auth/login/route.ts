@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       role: user.role,
       locationId: user.locationId,
+      companyId: user.companyId,
     };
     
     const token = signToken(sessionPayload);

@@ -16,6 +16,9 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * take;
 
     let whereClause: any = {};
+    if (session.companyId) {
+      whereClause.companyId = session.companyId;
+    }
     if (search) {
       whereClause.id = { contains: search, mode: 'insensitive' };
     }
@@ -88,6 +91,7 @@ export async function POST(req: NextRequest) {
         originLocationId,
         destinationLocationId,
         currentState: 'CREATED',
+        companyId: session.companyId,
       },
     });
 

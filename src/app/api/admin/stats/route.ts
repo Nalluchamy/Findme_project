@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const companyId = session.companyId;
+    const filter = companyId ? { companyId } : {};
+
     const [
       totalParcels,
       todayParcels,
@@ -23,37 +26,39 @@ export async function GET(req: NextRequest) {
       recentEvents,
     ] = await Promise.all([
       // Total parcels ever
-      db.parcel.count(),
+      db.parcel.count({ where: filter }),
 
       // Parcels created today
-      db.parcel.count({ where: { createdAt: { gte: today } } }),
+      db.parcel.count({ where: { ...filter, createdAt: { gte: today } } }),
 
       // Pending: cash sitting in branch/hub waiting for payout
       db.parcel.findMany({
-        where: { currentState: { in: ['HANDOVER_TO_ORIGIN_BRANCH', 'HANDOVER_TO_ORIGIN_HUB', 'HANDOVER_TO_DEST_HUB'] } },
+        where: { ...filter, currentState: { in: ['HANDOVER_TO_ORIGIN_BRANCH', 'HANDOVER_TO_ORIGIN_HUB', 'HANDOVER_TO_DEST_HUB'] } },
         select: { codAmount: true },
       }),
 
       // Discrepancies
-      db.parcel.count({ where: { currentState: 'DISCREPANCY_FLAGGED' } }),
+      db.parcel.count({ where: { ...filter, currentState: 'DISCREPANCY_FLAGGED' } }),
 
       // Settled today
       db.parcel.findMany({
-        where: { currentState: 'SETTLED_TO_SELLER', updatedAt: { gte: today } },
+        where: { ...filter, currentState: 'SETTLED_TO_SELLER', updatedAt: { gte: today } },
         select: { codAmount: true },
       }),
 
       // Active delivery agents (users with role DELIVERY_AGENT)
-      db.user.count({ where: { role: 'DELIVERY_AGENT' } }),
+      db.user.count({ where: { ...filter, role: 'DELIVERY_AGENT' } }),
 
       // All parcels for status breakdown
       db.parcel.groupBy({
+        where: filter,
         by: ['currentState'],
         _count: { currentState: true },
       }),
 
       // Recent ledger events (activity feed)
       db.ledgerEvent.findMany({
+        where: { parcel: filter },
         take: 10,
         orderBy: { timestamp: 'desc' },
         include: {

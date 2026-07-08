@@ -9,6 +9,7 @@ export interface UserSession {
   name: string;
   role: string;
   locationId: string | null;
+  companyId: string | null;
 }
 
 export function signToken(payload: UserSession): string {
