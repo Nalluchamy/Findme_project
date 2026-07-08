@@ -49,6 +49,7 @@ model Parcel {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   ledgerEvents          LedgerEvent[]
+  notificationLogs      NotificationLog[]
   destinationLocation   Location      @relation("DestParcels", fields: [destinationLocationId], references: [id])
   originLocation        Location      @relation("OriginParcels", fields: [originLocationId], references: [id])
   seller                User          @relation("SellerParcels", fields: [sellerId], references: [id])
@@ -118,19 +119,36 @@ enum LedgerEventType {
 }
 
 model Company {
-  id        String     @id @default(uuid())
-  name      String
-  slug      String     @unique
-  phone     String?
-  email     String?
-  address   String?
-  logoUrl   String?
-  gstNumber String?
-  panNumber String?
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  users     User[]
-  locations Location[]
-  parcels   Parcel[]
+  id               String            @id @default(uuid())
+  name             String
+  slug             String            @unique
+  phone            String?
+  email            String?
+  address          String?
+  logoUrl          String?
+  gstNumber        String?
+  panNumber        String?
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  users            User[]
+  locations        Location[]
+  parcels          Parcel[]
+  notificationLogs NotificationLog[]
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  companyId String
+  parcelId  String
+  recipient String
+  channel   String
+  template  String
+  status    String
+  createdAt DateTime @default(now())
+  company   Company  @relation(fields: [companyId], references: [id])
+  parcel    Parcel   @relation(fields: [parcelId], references: [id])
+
+  @@index([companyId])
+  @@index([parcelId])
 }
