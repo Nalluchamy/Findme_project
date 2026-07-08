@@ -39,21 +39,22 @@ model Location {
 }
 
 model Parcel {
-  id                    String        @id
+  id                    String            @id
   sellerId              String
-  codAmount             Decimal       @db.Decimal(10, 2)
+  codAmount             Decimal           @db.Decimal(10, 2)
   originLocationId      String
   destinationLocationId String
   companyId             String?
-  currentState          ParcelState   @default(CREATED)
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  carrier               String            @default("ST_COURIER")
+  currentState          ParcelState       @default(CREATED)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
   ledgerEvents          LedgerEvent[]
   notificationLogs      NotificationLog[]
-  destinationLocation   Location      @relation("DestParcels", fields: [destinationLocationId], references: [id])
-  originLocation        Location      @relation("OriginParcels", fields: [originLocationId], references: [id])
+  destinationLocation   Location          @relation("DestParcels", fields: [destinationLocationId], references: [id])
+  originLocation        Location          @relation("OriginParcels", fields: [originLocationId], references: [id])
   seller                User          @relation("SellerParcels", fields: [sellerId], references: [id])
-  company               Company?      @relation(fields: [companyId], references: [id])
+  company               Company?          @relation(fields: [companyId], references: [id])
 
   @@index([currentState])
   @@index([createdAt])
