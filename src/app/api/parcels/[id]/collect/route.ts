@@ -1,44 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { NextRequest } from 'next/server';
+import { requireAuth, successResponse, errorResponse } from '@/lib/api';
+import { ParcelRepository } from '@/repositories/parcel.repository';
+import { NotificationService } from '@/services/notification.service';
 import { validateStateTransition } from '@/lib/stateMachine';
+import { db } from '@/lib/db';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
-  const session = getSession(req);
-  if (!session || (session.role !== 'DELIVERY_AGENT' && session.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const { authorized, errorResponse: authError, session } = requireAuth(req, ['DELIVERY_AGENT', 'ADMIN']);
+  if (!authorized || !session) return authError!;
 
-  // Resolve params for compatibility
   const resolvedParams = await params;
   const id = resolvedParams.id;
   
   const { amount, photoUrl, gpsCoords } = await req.json();
 
   if (amount === undefined) {
-    return NextResponse.json({ error: 'Amount is required' }, { status: 400 });
+    return errorResponse('INVALID_INPUT', 'Amount is required.');
   }
 
+  const parcelRepo = new ParcelRepository(session);
+  const notificationService = new NotificationService(session);
+
   try {
+    const parcel = await parcelRepo.findById(id);
+    if (!parcel) {
+      return errorResponse('PARCEL_NOT_FOUND', 'Parcel not found.', 404);
+    }
+
+    const validation = validateStateTransition(parcel.currentState, 'COD_COLLECTED');
+    if (!validation.valid) {
+      return errorResponse('INVALID_TRANSITION', validation.error || 'Invalid transition state.', 409);
+    }
+
+    const expected = Number(parcel.codAmount);
+    const confirmed = Number(amount);
+
     const result = await db.$transaction(async (tx: any) => {
-      const parcel = await tx.parcel.findUnique({
-        where: { id },
-      });
-
-      if (!parcel) {
-        throw new Error('Parcel not found');
-      }
-
-      const validation = validateStateTransition(parcel.currentState, 'COD_COLLECTED');
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
-
-      const expected = Number(parcel.codAmount);
-      const confirmed = Number(amount);
-
       if (expected !== confirmed) {
-        // Discrepancy mismatch immediately
+        // Discrepancy mismatch
         await tx.ledgerEvent.create({
           data: {
             parcelId: id,
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           data: { currentState: 'DISCREPANCY_FLAGGED' },
         });
 
-        return { success: true, flagged: true, message: 'Discrepancy flagged due to amount mismatch.' };
+        return { flagged: true, message: 'Discrepancy flagged due to amount mismatch.' };
       } else {
         // Success collection
         await tx.ledgerEvent.create({
@@ -91,16 +90,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           data: { currentState: 'COD_COLLECTED' },
         });
 
-        return { success: true, flagged: false };
+        return { flagged: false, message: 'COD collected successfully.' };
       }
     });
 
-    return NextResponse.json(result);
+    // Send simulated WhatsApp notification for successful collections
+    if (!result.flagged) {
+      await notificationService.sendAlert(
+        '9876543210', // Target phone number (Mocked customer/seller)
+        'COD_COLLECTED',
+        id,
+        { amount: confirmed.toString() }
+      );
+    }
+
+    return successResponse(result, result.message);
   } catch (error: any) {
     console.error('Collection error:', error);
-    if (error.message === 'Parcel not found') return NextResponse.json({ error: error.message }, { status: 404 });
-    if (error.message.includes('Invalid transition')) return NextResponse.json({ error: error.message }, { status: 409 });
-    
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return errorResponse('INTERNAL_ERROR', 'A server error occurred during collection.');
   }
 }

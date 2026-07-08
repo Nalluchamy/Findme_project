@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import QRScanner from '@/components/QRScanner';
 import {
   User, Shield, Truck, Building, Layers, Search, DollarSign,
   MapPin, LogOut, Package, RefreshCw, Menu, Home, Wallet,
   ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock, X, Settings, HelpCircle,
-  AlertTriangle, Activity, TrendingUp, Users, BarChart3, Zap, Printer
+  AlertTriangle, Activity, TrendingUp, Users, BarChart3, Zap, Printer, Upload, Camera
 } from 'lucide-react';
 
 function getCsrfToken() {
@@ -70,7 +72,9 @@ interface AdminStats {
 }
 
 export default function FindMeApp() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -418,9 +422,14 @@ export default function FindMeApp() {
               <Menu className="w-5 h-5" />
             </button>
             <h1 className="font-bold text-[15px] text-slate-900 tracking-tight absolute left-1/2 -translate-x-1/2">Courier Connect</h1>
-            <button onClick={() => setIsSearchOpen(true)} className="text-slate-500 hover:text-[var(--color-primary)] p-1.5 -mr-1.5 rounded-full transition-colors active:bg-slate-100">
-              <Search className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1 -mr-1.5">
+              <button onClick={() => setIsScannerOpen(true)} className="text-slate-500 hover:text-[var(--color-primary)] p-1.5 rounded-full transition-colors active:bg-slate-100" title="Scan QR Code">
+                <Camera className="w-5 h-5" />
+              </button>
+              <button onClick={() => setIsSearchOpen(true)} className="text-slate-500 hover:text-[var(--color-primary)] p-1.5 rounded-full transition-colors active:bg-slate-100">
+                <Search className="w-5 h-5" />
+              </button>
+            </div>
           </>
         ) : (
           <div className="flex items-center w-full animate-in slide-in-from-right-4 duration-200">
@@ -521,9 +530,16 @@ export default function FindMeApp() {
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-[13px] font-bold text-slate-800">Active Parcels</h3>
-              {!isDataLoading && (
-                <span className="text-[11px] font-semibold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-full">{parcels.length} Items</span>
-              )}
+              <div className="flex items-center gap-2">
+                {(user?.role === 'SELLER' || user?.role === 'ADMIN') && (
+                  <button onClick={() => router.push('/import')} className="text-blue-600 hover:text-blue-800 text-[10px] font-bold flex items-center gap-1 bg-blue-50 border border-blue-100 rounded-lg px-2 py-0.5 active:scale-95 transition-all">
+                    <Upload className="w-3 h-3" /> Bulk CSV
+                  </button>
+                )}
+                {!isDataLoading && (
+                  <span className="text-[11px] font-semibold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-full">{parcels.length} Items</span>
+                )}
+              </div>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
@@ -1112,8 +1128,15 @@ export default function FindMeApp() {
             </div>
           </>
         )}
-      </div>
-
+      {isScannerOpen && (
+        <QRScanner
+          onScan={(scannedId) => {
+            setIsScannerOpen(false);
+            setSelectedParcelId(scannedId);
+          }}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }
