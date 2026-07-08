@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import {
   User, Shield, Truck, Building, Layers, Search, DollarSign,
   MapPin, LogOut, Package, RefreshCw, Menu, Home, Wallet,
-  ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock, X, Settings, HelpCircle
+  ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock, X, Settings, HelpCircle,
+  AlertTriangle, Activity, TrendingUp, Users, BarChart3, Zap
 } from 'lucide-react';
 
 function getCsrfToken() {
@@ -57,6 +58,17 @@ interface Parcel {
   ledgerEvents: LedgerEvent[];
 }
 
+interface AdminStats {
+  totalParcels: number;
+  todayParcels: number;
+  pendingAmount: number;
+  discrepancies: number;
+  settledTodayAmount: number;
+  activeAgents: number;
+  statusBreakdown: { currentState: string; _count: { currentState: number } }[];
+  recentEvents: any[];
+}
+
 export default function FindMeApp() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -70,8 +82,10 @@ export default function FindMeApp() {
     locations: [], users: []
   });
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'parcels' | 'settlements' | 'profile'>('parcels');
+  const [activeTab, setActiveTab] = useState<'parcels' | 'settlements' | 'profile' | 'admin' | 'discrepancies'>('parcels');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -81,6 +95,9 @@ export default function FindMeApp() {
   const [actionAmount, setActionAmount] = useState('');
   const [actionNote, setActionNote] = useState('');
   const [actionTargetUser, setActionTargetUser] = useState('');
+  const [discrepancyResolveNote, setDiscrepancyResolveNote] = useState('');
+  const [discrepancyResolveAmount, setDiscrepancyResolveAmount] = useState('');
+  const [resolvingParcelId, setResolvingParcelId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -99,6 +116,7 @@ export default function FindMeApp() {
     if (user) {
       const timer = setTimeout(() => {
         loadData();
+        if (user.role === 'ADMIN') loadAdminStats();
       }, 400);
       return () => clearTimeout(timer);
     }
@@ -156,10 +174,41 @@ export default function FindMeApp() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/me', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
-      setUser(null); setParcels([]); setSelectedParcelId(null); setActiveTab('parcels');
+      setUser(null); setParcels([]); setSelectedParcelId(null); setActiveTab('parcels'); setAdminStats(null);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const loadAdminStats = async () => {
+    setIsAdminLoading(true);
+    try {
+      const res = await fetch('/api/admin/stats');
+      const data = await res.json();
+      if (!data.error) setAdminStats(data);
+    } catch (e) { console.error(e); }
+    finally { setIsAdminLoading(false); }
+  };
+
+  const handleDiscrepancyResolve = async (parcelId: string, targetState: string) => {
+    if (!discrepancyResolveNote.trim()) { alert('Please add a resolution note.'); return; }
+    const amount = parseFloat(discrepancyResolveAmount);
+    if (isNaN(amount) || amount <= 0) { alert('Please enter a valid resolved amount.'); return; }
+    try {
+      const res = await fetch('/api/discrepancies/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify({ parcelId, targetState, resolvedAmount: amount, note: discrepancyResolveNote }),
+      });
+      if (res.ok) {
+        alert('Discrepancy resolved!');
+        setResolvingParcelId(null); setDiscrepancyResolveNote(''); setDiscrepancyResolveAmount('');
+        loadData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to resolve');
+      }
+    } catch (e) { alert('Error'); }
   };
 
   const loadData = async () => {
@@ -589,30 +638,320 @@ export default function FindMeApp() {
             </div>
           </div>
         )}
-      </main>
 
+        {/* DISCREPANCIES TAB — Finance/Admin only */}
+        {activeTab === 'discrepancies' && (
+          <div className="p-5 space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[13px] font-bold text-slate-800">Discrepancies</h3>
+              <span className="text-[11px] font-semibold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                {parcels.filter(p => p.currentState === 'DISCREPANCY_FLAGGED').length} Flagged
+              </span>
+            </div>
+
+            {parcels.filter(p => p.currentState === 'DISCREPANCY_FLAGGED').length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
+                <CheckCircle className="w-10 h-10 text-emerald-300 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm font-medium">No discrepancies found.</p>
+                <p className="text-slate-300 text-xs mt-1">All transactions are clean.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {parcels.filter(p => p.currentState === 'DISCREPANCY_FLAGGED').map(parcel => {
+                  const discrepancyEvent = parcel.ledgerEvents.find(e => e.eventType === 'DISCREPANCY_FLAGGED');
+                  const isResolving = resolvingParcelId === parcel.id;
+                  return (
+                    <div key={parcel.id} className="bg-white border border-rose-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="w-4 h-4 text-rose-500" />
+                              <span className="font-mono text-sm font-bold text-slate-900">{parcel.id}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500">{parcel.destinationLocation?.name}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-bold text-rose-600">₹{Number(parcel.codAmount).toFixed(2)}</div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">COD Amount</div>
+                          </div>
+                        </div>
+
+                        {discrepancyEvent && (
+                          <div className="mt-3 p-3 bg-rose-50 rounded-xl border border-rose-100">
+                            <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider mb-1">Mismatch Details</div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-slate-500">Expected</span>
+                              <span className="font-bold text-slate-700">₹{Number(discrepancyEvent.expectedAmount).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs mt-1">
+                              <span className="text-slate-500">Confirmed</span>
+                              <span className="font-bold text-rose-600">₹{Number(discrepancyEvent.confirmedAmount ?? 0).toFixed(2)}</span>
+                            </div>
+                            {discrepancyEvent.discrepancyNote && (
+                              <div className="text-[10px] text-rose-600 mt-2 italic">{discrepancyEvent.discrepancyNote}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {isResolving ? (
+                          <div className="mt-3 space-y-2">
+                            <input
+                              type="number"
+                              placeholder="Resolved amount (₹)"
+                              value={discrepancyResolveAmount}
+                              onChange={e => setDiscrepancyResolveAmount(e.target.value)}
+                              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                            />
+                            <textarea
+                              placeholder="Resolution note (required)..."
+                              value={discrepancyResolveNote}
+                              onChange={e => setDiscrepancyResolveNote(e.target.value)}
+                              rows={2}
+                              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[var(--color-primary)] resize-none"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDiscrepancyResolve(parcel.id, 'HANDOVER_TO_ORIGIN_BRANCH')}
+                                className="flex-1 bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-transform"
+                              >✓ Approve &amp; Settle</button>
+                              <button
+                                onClick={() => { setResolvingParcelId(null); setDiscrepancyResolveNote(''); setDiscrepancyResolveAmount(''); }}
+                                className="flex-1 bg-slate-100 text-slate-600 text-xs font-bold py-2.5 rounded-xl"
+                              >Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={() => { setResolvingParcelId(parcel.id); setDiscrepancyResolveAmount(Number(parcel.codAmount).toFixed(2)); }}
+                              className="flex-1 bg-[var(--color-primary)] text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-transform"
+                            >Resolve Discrepancy</button>
+                            <button
+                              onClick={() => setSelectedParcelId(parcel.id)}
+                              className="px-4 bg-slate-100 text-slate-600 text-xs font-bold py-2.5 rounded-xl"
+                            >Details</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ADMIN DASHBOARD TAB */}
+        {activeTab === 'admin' && (
+          <div className="p-5 space-y-5">
+            {/* Header */}
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h3 className="text-[15px] font-bold text-slate-900">Admin Dashboard</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">System-wide overview</p>
+              </div>
+              <button onClick={loadAdminStats} className="p-2 text-slate-400 hover:text-[var(--color-primary)] bg-slate-50 rounded-xl border border-slate-200 transition-colors">
+                <RefreshCw className={`w-4 h-4 ${isAdminLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {isAdminLoading || !adminStats ? (
+              <div className="grid grid-cols-2 gap-3">
+                {[1,2,3,4,5,6].map(i => (
+                  <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 animate-pulse">
+                    <div className="h-3 w-16 bg-slate-200 rounded mb-3"></div>
+                    <div className="h-7 w-20 bg-slate-100 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* KPI Cards Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-4 text-white shadow-lg shadow-blue-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Total Parcels</span>
+                      <Package className="w-4 h-4 text-blue-300" />
+                    </div>
+                    <div className="text-3xl font-extrabold">{adminStats.totalParcels}</div>
+                    <div className="text-[10px] text-blue-300 mt-1">+{adminStats.todayParcels} today</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg shadow-emerald-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Settled Today</span>
+                      <TrendingUp className="w-4 h-4 text-emerald-200" />
+                    </div>
+                    <div className="text-xl font-extrabold">₹{adminStats.settledTodayAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                    <div className="text-[10px] text-emerald-200 mt-1">Paid to sellers</div>
+                  </div>
+
+                  <div className="bg-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Pending</span>
+                      <Clock className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-900">₹{adminStats.pendingAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                    <div className="text-[10px] text-amber-600 mt-1">Awaiting payout</div>
+                  </div>
+
+                  <div className="bg-white border border-rose-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-rose-600">Discrepancies</span>
+                      <AlertTriangle className="w-4 h-4 text-rose-500" />
+                    </div>
+                    <div className="text-3xl font-extrabold text-rose-600">{adminStats.discrepancies}</div>
+                    <div className="text-[10px] text-rose-400 mt-1">Needs resolution</div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Agents</span>
+                      <Users className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div className="text-3xl font-extrabold text-slate-900">{adminStats.activeAgents}</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Delivery agents</div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Today</span>
+                      <Zap className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div className="text-3xl font-extrabold text-slate-900">{adminStats.todayParcels}</div>
+                    <div className="text-[10px] text-slate-400 mt-1">New parcels</div>
+                  </div>
+                </div>
+
+                {/* Status Breakdown */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart3 className="w-4 h-4 text-[var(--color-primary)]" />
+                    <h4 className="text-[12px] font-bold text-slate-800">Status Breakdown</h4>
+                  </div>
+                  <div className="space-y-2.5">
+                    {adminStats.statusBreakdown.map(item => {
+                      const total = adminStats.totalParcels || 1;
+                      const pct = Math.round((item._count.currentState / total) * 100);
+                      const colors: Record<string, string> = {
+                        CREATED: 'bg-slate-400',
+                        COD_COLLECTED: 'bg-emerald-500',
+                        HANDOVER_TO_DEST_HUB: 'bg-blue-500',
+                        HANDOVER_TO_ORIGIN_HUB: 'bg-indigo-500',
+                        HANDOVER_TO_ORIGIN_BRANCH: 'bg-violet-500',
+                        SETTLED_TO_SELLER: 'bg-green-500',
+                        DISCREPANCY_FLAGGED: 'bg-rose-500',
+                      };
+                      const labels: Record<string, string> = {
+                        CREATED: 'Pending', COD_COLLECTED: 'Collected',
+                        HANDOVER_TO_DEST_HUB: 'Dest Hub', HANDOVER_TO_ORIGIN_HUB: 'In Transit',
+                        HANDOVER_TO_ORIGIN_BRANCH: 'At Branch', SETTLED_TO_SELLER: 'Completed',
+                        DISCREPANCY_FLAGGED: 'Discrepancy'
+                      };
+                      return (
+                        <div key={item.currentState}>
+                          <div className="flex justify-between text-[10px] mb-1">
+                            <span className="font-semibold text-slate-600">{labels[item.currentState] || item.currentState}</span>
+                            <span className="font-bold text-slate-700">{item._count.currentState} ({pct}%)</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${colors[item.currentState] || 'bg-slate-400'} transition-all duration-700`} style={{ width: `${pct}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Recent Activity Feed */}
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-[var(--color-primary)]" />
+                    <h4 className="text-[12px] font-bold text-slate-800">Recent Activity</h4>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {adminStats.recentEvents.slice(0, 6).map(event => {
+                      const typeColors: Record<string, string> = {
+                        COD_COLLECTED: 'text-emerald-600 bg-emerald-50',
+                        SETTLED_TO_SELLER: 'text-green-600 bg-green-50',
+                        DISCREPANCY_FLAGGED: 'text-rose-600 bg-rose-50',
+                        HANDOVER_TO_ORIGIN_BRANCH: 'text-violet-600 bg-violet-50',
+                        HANDOVER_TO_ORIGIN_HUB: 'text-indigo-600 bg-indigo-50',
+                        HANDOVER_TO_DEST_HUB: 'text-blue-600 bg-blue-50',
+                      };
+                      const typeLabels: Record<string, string> = {
+                        COD_COLLECTED: 'Cash Collected', SETTLED_TO_SELLER: 'Settled',
+                        DISCREPANCY_FLAGGED: 'Discrepancy!', HANDOVER_TO_ORIGIN_BRANCH: 'At Branch',
+                        HANDOVER_TO_ORIGIN_HUB: 'In Transit', HANDOVER_TO_DEST_HUB: 'At Dest Hub'
+                      };
+                      return (
+                        <div key={event.id} className="px-4 py-3 flex items-center gap-3">
+                          <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 ${typeColors[event.eventType] || 'text-slate-500 bg-slate-100'}`}>
+                            {typeLabels[event.eventType] || event.eventType}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-xs text-slate-700 font-semibold truncate">{event.parcel?.id}</div>
+                            <div className="text-[10px] text-slate-400">{event.fromParty?.name || 'System'}</div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(event.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </main>
 
       {/* Bottom Navigation */}
       <nav className="absolute bottom-0 w-full bg-white border-t border-slate-200 flex justify-around items-center pb-safe pt-2 z-30">
         <button 
           onClick={() => setActiveTab('parcels')}
-          className={`flex flex-col items-center p-2 min-w-[64px] transition-colors ${activeTab === 'parcels' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'parcels' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <Package className={`w-5 h-5 mb-1 ${activeTab === 'parcels' ? 'fill-blue-50' : ''}`} />
+          <Package className="w-5 h-5 mb-1" />
           <span className="text-[10px] font-semibold">Parcels</span>
         </button>
         <button 
           onClick={() => setActiveTab('settlements')}
-          className={`flex flex-col items-center p-2 min-w-[64px] transition-colors ${activeTab === 'settlements' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'settlements' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <Wallet className={`w-5 h-5 mb-1 ${activeTab === 'settlements' ? 'fill-blue-50' : ''}`} />
-          <span className="text-[10px] font-semibold">Settlements</span>
+          <Wallet className="w-5 h-5 mb-1" />
+          <span className="text-[10px] font-semibold">Finance</span>
         </button>
+        {(user?.role === 'FINANCE_OFFICER' || user?.role === 'ADMIN') && (
+          <button 
+            onClick={() => setActiveTab('discrepancies')}
+            className={`flex flex-col items-center p-2 min-w-[56px] transition-colors relative ${activeTab === 'discrepancies' ? 'text-rose-500' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <AlertTriangle className="w-5 h-5 mb-1" />
+            {parcels.filter(p => p.currentState === 'DISCREPANCY_FLAGGED').length > 0 && (
+              <span className="absolute top-1 right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                {parcels.filter(p => p.currentState === 'DISCREPANCY_FLAGGED').length}
+              </span>
+            )}
+            <span className="text-[10px] font-semibold">Issues</span>
+          </button>
+        )}
+        {user?.role === 'ADMIN' && (
+          <button 
+            onClick={() => { setActiveTab('admin'); loadAdminStats(); }}
+            className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'admin' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <BarChart3 className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-semibold">Admin</span>
+          </button>
+        )}
         <button 
           onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center p-2 min-w-[64px] transition-colors ${activeTab === 'profile' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'profile' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          <User className={`w-5 h-5 mb-1 ${activeTab === 'profile' ? 'fill-blue-50' : ''}`} />
+          <User className="w-5 h-5 mb-1" />
           <span className="text-[10px] font-semibold">Profile</span>
         </button>
       </nav>
@@ -685,6 +1024,46 @@ export default function FindMeApp() {
                   </div>
                 </div>
               </div>
+
+              {/* Parcel Timeline */}
+              {selectedParcel.ledgerEvents.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Shipment Timeline</h3>
+                  <div className="relative">
+                    {[...selectedParcel.ledgerEvents].reverse().map((event, idx, arr) => {
+                      const isLast = idx === arr.length - 1;
+                      const eventLabels: Record<string, string> = {
+                        COD_COLLECTED: 'Cash Collected by Agent',
+                        HANDOVER_TO_DEST_HUB: 'Received at Destination Hub',
+                        HANDOVER_TO_ORIGIN_HUB: 'In Transit to Origin Hub',
+                        HANDOVER_TO_ORIGIN_BRANCH: 'Received at Origin Branch',
+                        SETTLED_TO_SELLER: 'Settled to Seller',
+                        DISCREPANCY_FLAGGED: 'Discrepancy Flagged',
+                      };
+                      const isDiscrepancy = event.eventType === 'DISCREPANCY_FLAGGED';
+                      return (
+                        <div key={event.id} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-3 h-3 rounded-full shrink-0 mt-0.5 z-10 ${isDiscrepancy ? 'bg-rose-500 ring-2 ring-rose-200' : isLast ? 'bg-[var(--color-primary)] ring-2 ring-blue-200' : 'bg-emerald-500'}`}></div>
+                            {!isLast && <div className="w-px flex-1 bg-slate-100 my-1 min-h-[24px]"></div>}
+                          </div>
+                          <div className="pb-4 flex-1">
+                            <div className={`text-[12px] font-bold ${isDiscrepancy ? 'text-rose-600' : 'text-slate-900'}`}>{eventLabels[event.eventType] || event.eventType}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{new Date(event.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                            {event.fromParty && <div className="text-[10px] text-slate-500 mt-0.5">By: {event.fromParty.name}</div>}
+                            {event.confirmedAmount !== null && event.confirmedAmount !== event.expectedAmount && (
+                              <div className="text-[10px] text-rose-500 mt-0.5">⚠ Expected ₹{Number(event.expectedAmount).toFixed(2)}, Got ₹{Number(event.confirmedAmount).toFixed(2)}</div>
+                            )}
+                            {isDiscrepancy && event.discrepancyNote && (
+                              <div className="text-[10px] text-rose-500 mt-1 italic">{event.discrepancyNote}</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
             </main>
 
