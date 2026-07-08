@@ -58,9 +58,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       });
 
+      const body = await req.json();
+
       if (pendingEvent) {
         // --- PARTY B CONFIRMATION FLOW ---
-        const { amount } = await req.json();
+        const { amount } = body;
 
         if (amount === undefined) {
           throw new Error('Confirmed amount is required for confirmation');
@@ -114,9 +116,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           return { success: true, flagged: false };
         }
       } else {
-        // --- PARTY A INITIATION FLOW ---
-        const { eventType, expectedAmount, toPartyId, photoUrl, gpsCoords } = await req.json();
+        const { eventType, expectedAmount, toPartyId, photoUrl, gpsCoords, amount } = body;
 
+        // --- SINGLE-STEP AUTO-RECEIVE FLOW ---
+        if (amount !== undefined && !eventType) {
+          let newEventType: LedgerEventType;
+          if (session.role === 'BRANCH_STAFF') newEventType = 'HANDOVER_TO_ORIGIN_BRANCH';
+          else if (session.role === 'HUB_OPERATOR') newEventType = 'HANDOVER_TO_ORIGIN_HUB';
+          else throw new Error('Role cannot auto-receive handover');
+
+          // Find the last person who had it
+          const lastEvent = await tx.ledgerEvent.findFirst({
+            where: { parcelId: id },
+            orderBy: { timestamp: 'desc' }
+          });
+
+          const expected = Number(parcel.codAmount);
+          const confirmed = Number(amount);
+
+          await tx.ledgerEvent.create({
+            data: {
+              parcelId: id,
+              eventType: newEventType,
+              fromPartyId: lastEvent?.toPartyId || lastEvent?.fromPartyId || session.id, // Fallback to someone
+              toPartyId: session.id,
+              expectedAmount: expected,
+              confirmedAmount: confirmed,
+              confirmedByFrom: true,
+              confirmedByTo: true,
+              discrepancyNote: expected !== confirmed ? `Mismatch on auto-receive` : null,
+            }
+          });
+
+          await tx.parcel.update({
+            where: { id },
+            data: { currentState: expected !== confirmed ? 'DISCREPANCY_FLAGGED' : newEventType }
+          });
+
+          return { success: true, flagged: expected !== confirmed };
+        }
+
+        // --- PARTY A INITIATION FLOW ---
         if (!eventType || expectedAmount === undefined || !toPartyId) {
           throw new Error('eventType, expectedAmount, and toPartyId are required');
         }
