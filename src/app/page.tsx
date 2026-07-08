@@ -5,7 +5,7 @@ import {
   User, Shield, Truck, Building, Layers, Search, DollarSign,
   MapPin, LogOut, Package, RefreshCw, Menu, Home, Wallet,
   ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock, X, Settings, HelpCircle,
-  AlertTriangle, Activity, TrendingUp, Users, BarChart3, Zap
+  AlertTriangle, Activity, TrendingUp, Users, BarChart3, Zap, Printer
 } from 'lucide-react';
 
 function getCsrfToken() {
@@ -126,7 +126,15 @@ export default function FindMeApp() {
     try {
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      if (data.user) setUser(data.user);
+      if (data.user) {
+        setUser(data.user);
+        const urlParams = new URLSearchParams(window.location.search);
+        const scanId = urlParams.get('scan');
+        if (scanId) {
+          setSelectedParcelId(scanId);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -454,6 +462,11 @@ export default function FindMeApp() {
               <button onClick={() => { setIsMenuOpen(false); setActiveTab('settlements'); }} className="w-full flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 hover:text-[var(--color-primary)] rounded-xl text-sm font-semibold transition-colors text-left">
                 <Wallet className="w-4 h-4" /> Finance
               </button>
+              {(user?.role === 'FINANCE_OFFICER' || user?.role === 'ADMIN') && (
+                <button onClick={() => { setIsMenuOpen(false); window.open('/reports', '_blank'); }} className="w-full flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 hover:text-[var(--color-primary)] rounded-xl text-sm font-semibold transition-colors text-left">
+                  <BarChart3 className="w-4 h-4" /> Daily Closing Report
+                </button>
+              )}
               <button disabled className="w-full flex items-center gap-3 p-3 text-slate-400 opacity-60 rounded-xl text-sm font-semibold text-left">
                 <Clock className="w-4 h-4" /> Pending Tasks
               </button>
@@ -960,10 +973,12 @@ export default function FindMeApp() {
       <div className={`absolute inset-0 bg-[var(--background)] z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${selectedParcel ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedParcel && (
           <>
-            <header className="bg-white border-b border-slate-200 px-4 py-3.5 flex items-center justify-between shrink-0">
+            <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
               <button onClick={() => setSelectedParcelId(null)} className="text-slate-500 hover:text-slate-800 p-1"><ArrowLeft className="w-5 h-5" /></button>
               <h1 className="font-bold text-[15px] text-slate-900 tracking-tight">Parcel Details</h1>
-              <button className="text-slate-500 hover:text-slate-800 p-1"><MoreVertical className="w-5 h-5" /></button>
+              <button onClick={() => window.open(`/label/${selectedParcel.id}`, '_blank')} className="text-blue-600 hover:text-blue-800 p-1.5 rounded-xl flex items-center gap-1 text-xs font-bold border border-blue-100 bg-blue-50 px-3 py-1 shadow-sm active:scale-95 transition-transform">
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
             </header>
 
             <main className="flex-1 overflow-y-auto p-5 pb-24 space-y-4">
