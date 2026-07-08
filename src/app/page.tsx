@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   User, Shield, Truck, Building, Layers, Search, DollarSign,
   MapPin, LogOut, Package, RefreshCw, Menu, Home, Wallet,
-  ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock
+  ChevronRight, ArrowLeft, MoreVertical, CreditCard, ChevronDown, CheckCircle, Target, ArrowRight, Clock, X, Settings, HelpCircle
 } from 'lucide-react';
 
 function getCsrfToken() {
@@ -74,6 +74,8 @@ export default function FindMeApp() {
   const [activeTab, setActiveTab] = useState<'parcels' | 'settlements' | 'profile'>('parcels');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Forms
   const [actionAmount, setActionAmount] = useState('');
@@ -94,8 +96,13 @@ export default function FindMeApp() {
   }, []);
 
   useEffect(() => {
-    if (user) loadData();
-  }, [user]);
+    if (user) {
+      const timer = setTimeout(() => {
+        loadData();
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [user, searchQuery]);
 
   const fetchSession = async () => {
     try {
@@ -347,11 +354,79 @@ export default function FindMeApp() {
     <div className="h-screen bg-[var(--background)] text-slate-900 flex flex-col max-w-md mx-auto relative overflow-hidden shadow-2xl border-x border-slate-200">
       
       {/* Header App Bar */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3.5 flex items-center justify-between z-20 shrink-0">
-        <button className="text-slate-500 hover:text-slate-800 p-1 rounded-full"><Menu className="w-5 h-5" /></button>
-        <h1 className="font-bold text-[15px] text-slate-900 tracking-tight">Courier Connect</h1>
-        <button className="text-slate-500 hover:text-slate-800 p-1 rounded-full"><Search className="w-5 h-5" /></button>
+      <header className="bg-white border-b border-slate-200 px-4 py-3.5 flex items-center justify-between z-20 shrink-0 relative h-14">
+        {!isSearchOpen ? (
+          <>
+            <button onClick={() => setIsMenuOpen(true)} className="text-slate-500 hover:text-[var(--color-primary)] p-1.5 -ml-1.5 rounded-full transition-colors active:bg-slate-100">
+              <Menu className="w-5 h-5" />
+            </button>
+            <h1 className="font-bold text-[15px] text-slate-900 tracking-tight absolute left-1/2 -translate-x-1/2">Courier Connect</h1>
+            <button onClick={() => setIsSearchOpen(true)} className="text-slate-500 hover:text-[var(--color-primary)] p-1.5 -mr-1.5 rounded-full transition-colors active:bg-slate-100">
+              <Search className="w-5 h-5" />
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center w-full animate-in slide-in-from-right-4 duration-200">
+            <Search className="w-4 h-4 text-slate-400 absolute left-6" />
+            <input 
+              type="text" 
+              autoFocus
+              placeholder="Search by ID or destination..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-100 text-sm pl-10 pr-10 py-2 rounded-full outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+            />
+            <button onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }} className="absolute right-6 text-slate-400 hover:text-rose-500 p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </header>
+
+      {/* Side Menu Drawer Overlay */}
+      {isMenuOpen && (
+        <div className="absolute inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMenuOpen(false)}></div>
+          <div className="w-3/4 max-w-[280px] bg-white h-full relative z-10 animate-in slide-in-from-left duration-300 shadow-2xl flex flex-col">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 text-[var(--color-primary)] rounded-full flex items-center justify-center font-bold text-xl shadow-sm">
+                {user?.name.charAt(0)}
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">{user?.name}</div>
+                <div className="text-[10px] font-semibold text-[var(--color-primary)] uppercase tracking-wider">{user?.role.replace('_', ' ')}</div>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-1 overflow-y-auto flex-1">
+              <button onClick={() => setIsMenuOpen(false)} className="w-full flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 hover:text-[var(--color-primary)] rounded-xl text-sm font-semibold transition-colors text-left">
+                <Package className="w-4 h-4" /> Shipments
+              </button>
+              <button onClick={() => { setIsMenuOpen(false); setActiveTab('settlements'); }} className="w-full flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 hover:text-[var(--color-primary)] rounded-xl text-sm font-semibold transition-colors text-left">
+                <Wallet className="w-4 h-4" /> Finance
+              </button>
+              <button disabled className="w-full flex items-center gap-3 p-3 text-slate-400 opacity-60 rounded-xl text-sm font-semibold text-left">
+                <Clock className="w-4 h-4" /> Pending Tasks
+              </button>
+              
+              <div className="h-px w-full bg-slate-100 my-4"></div>
+              
+              <button disabled className="w-full flex items-center gap-3 p-3 text-slate-400 opacity-60 rounded-xl text-sm font-semibold text-left">
+                <Settings className="w-4 h-4" /> Settings
+              </button>
+              <button disabled className="w-full flex items-center gap-3 p-3 text-slate-400 opacity-60 rounded-xl text-sm font-semibold text-left">
+                <HelpCircle className="w-4 h-4" /> Help Center
+              </button>
+            </div>
+
+            <div className="p-4 border-t border-slate-100">
+              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold py-3 px-4 rounded-xl transition-colors text-sm">
+                <LogOut className="w-4 h-4" /> Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Scrollable Content */}
       <main className="flex-1 overflow-y-auto pb-24 relative">
