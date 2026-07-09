@@ -6,6 +6,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 
 interface ParcelDetail {
   id: string;
+  carrier: string;
   seller: { name: string };
   codAmount: number;
   originLocation: { name: string };
@@ -29,6 +30,7 @@ export default function ParcelLabelPrint() {
         if (found) {
           setParcel({
             id: found.id,
+            carrier: found.carrier || 'ST_COURIER',
             seller: found.seller || { name: 'ElectroWorld Seller' },
             codAmount: Number(found.codAmount),
             originLocation: found.originLocation,
@@ -103,8 +105,10 @@ export default function ParcelLabelPrint() {
         {/* Company Header */}
         <div className="border-b-2 border-slate-950 pb-2 flex items-center justify-between">
           <div>
-            <h1 className="font-extrabold text-[15px] tracking-tight text-blue-700 uppercase">Courier Connect</h1>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">FindMe Logistics</p>
+            <h1 className="font-extrabold text-[15px] tracking-tight text-blue-700 uppercase">
+              {parcel.carrier.replace('_', ' ')}
+            </h1>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">FindMe Logistics Partner</p>
           </div>
           <span className="text-[10px] font-bold px-2 py-0.5 border border-slate-950 rounded uppercase">COD SHIPMENT</span>
         </div>

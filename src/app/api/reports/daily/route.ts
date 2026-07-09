@@ -49,6 +49,11 @@ export async function GET(req: NextRequest) {
     let totalPending = 0;
     let discrepanciesCount = 0;
 
+    // Carrier breakdowns & scan stats
+    let totalScanned = 0;
+    let totalManual = 0;
+    const carrierMap: Record<string, { carrier: string; amount: number; count: number }> = {};
+
     const agentMap: Record<string, { name: string; amount: number; count: number }> = {};
     const branchMap: Record<string, { name: string; amount: number; count: number }> = {};
     const discrepanciesList: any[] = [];
@@ -56,8 +61,26 @@ export async function GET(req: NextRequest) {
     events.forEach(event => {
       const amount = Number(event.confirmedAmount ?? event.expectedAmount ?? 0);
       
+      // Check scan vs manual ratios via audit notes
+      if (event.discrepancyNote?.includes('Receipt Scan')) {
+        totalScanned += 1;
+      } else if (event.eventType === 'COD_COLLECTED' && event.fromParty?.role === 'BRANCH_STAFF') {
+        // Created/imported manually at branch desk
+        totalManual += 1;
+      }
+
       if (event.eventType === 'COD_COLLECTED') {
         totalCollected += amount;
+
+        // Carrier breakdown compilations
+        if (event.parcel) {
+          const carrier = event.parcel.carrier || 'ST_COURIER';
+          if (!carrierMap[carrier]) {
+            carrierMap[carrier] = { carrier, amount: 0, count: 0 };
+          }
+          carrierMap[carrier].amount += amount;
+          carrierMap[carrier].count += 1;
+        }
         
         // Agent metrics
         if (event.fromParty && event.fromParty.role === 'DELIVERY_AGENT') {
@@ -112,6 +135,9 @@ export async function GET(req: NextRequest) {
       totalPending,
       discrepanciesCount,
       discrepanciesList,
+      totalScanned,
+      totalManual,
+      carriers: Object.values(carrierMap),
       agents: Object.values(agentMap),
       branches: Object.values(branchMap),
     });

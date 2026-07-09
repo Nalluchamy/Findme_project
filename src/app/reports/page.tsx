@@ -9,6 +9,9 @@ interface ReportData {
   totalSettled: number;
   totalPending: number;
   discrepanciesCount: number;
+  totalScanned: number;
+  totalManual: number;
+  carriers: { carrier: string; amount: number; count: number }[];
   discrepanciesList: {
     parcelId: string;
     expected: number;
@@ -108,6 +111,39 @@ export default function DailyCashClosingReport() {
               <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
                 <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Active Vault Balance</span>
                 <span className="text-xl font-extrabold text-blue-600">₹{report.totalPending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            {/* Operational efficiency ratios panel */}
+            <div className="grid grid-cols-2 gap-8 py-5 border-b border-slate-200 text-xs">
+              <div>
+                <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2.5">Scanner Usage Rate</h4>
+                <div className="flex gap-4">
+                  <div className="flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-[9px] font-bold text-slate-400 block">Scanned Imports</span>
+                    <span className="text-base font-black text-slate-800">{report.totalScanned || 0}</span>
+                  </div>
+                  <div className="flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-[9px] font-bold text-slate-400 block">Manual Entries</span>
+                    <span className="text-base font-black text-slate-800">{report.totalManual || 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2.5">Carrier Distribution</h4>
+                {report.carriers.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic mt-2">No carrier logs recorded today.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                    {report.carriers.map((c, i) => (
+                      <div key={i} className="flex justify-between text-[11px] py-0.5 border-b border-slate-50">
+                        <span className="text-slate-600 font-semibold">{c.carrier.replace('_', ' ')} <span className="text-[9px] font-normal text-slate-400">({c.count} items)</span></span>
+                        <span className="font-bold text-slate-800">₹{c.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
