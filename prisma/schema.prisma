@@ -40,7 +40,7 @@ model Location {
 
 model Parcel {
   id                    String            @id
-  trackingNumber        String
+  trackingNumber        String            @default("")
   sellerId              String
   codAmount             Decimal           @db.Decimal(10, 2)
   originLocationId      String

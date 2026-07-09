@@ -5,7 +5,7 @@ export class LocationRepository extends BaseRepository {
   async findByName(name: string) {
     return db.location.findFirst({
       where: this.getTenantFilter({
-        name: { contains: name, mode: 'insensitive' },
+        name: { contains: name, mode: 'insensitive' as const },
       }),
     });
   }

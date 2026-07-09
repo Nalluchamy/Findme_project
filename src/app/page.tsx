@@ -1228,6 +1228,7 @@ export default function FindMeApp() {
             </div>
           </>
         )}
+      </div>
       {/* CREATE CONSIGNMENT IMPORT WIZARD */}
       {scanImportInfo && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center p-4">
@@ -1311,7 +1312,7 @@ export default function FindMeApp() {
               {/* Receipt photo preview */}
               <div className="border border-dashed border-slate-200 rounded-2xl p-3 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">
-                  <Image className="w-5 h-5 text-slate-400" />
+                  <Camera className="w-5 h-5 text-slate-400" />
                   <div>
                     <span className="text-[10px] font-bold text-slate-700 block">Receipt Attachment</span>
                     <span className="text-[8px] text-emerald-600 font-semibold block">✓ Captured (Mock)</span>
@@ -1337,7 +1338,7 @@ export default function FindMeApp() {
           <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
                 <span className="font-extrabold text-xs uppercase tracking-wider text-slate-800">Parcel Already Exists</span>
               </div>
               <button onClick={() => setDuplicateFoundInfo(null)} className="p-1.5 rounded-full bg-slate-100 text-slate-500">

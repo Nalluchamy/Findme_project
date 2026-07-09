@@ -4,7 +4,7 @@ export interface UserSession {
   id: string;
   username: string;
   name: string;
-  role: RoleType;
+  role: string;
   locationId: string | null;
   companyId: string | null;
 }
