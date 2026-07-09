@@ -14,6 +14,7 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   console.log('Clearing database...');
+  await prisma.receipt.deleteMany({});
   await prisma.ledgerEvent.deleteMany({});
   await prisma.parcel.deleteMany({});
   await prisma.user.deleteMany({});
@@ -111,12 +112,14 @@ async function main() {
   const parcel1 = await prisma.parcel.create({
     data: {
       id: 'PRCL-001',
+      trackingNumber: 'PRCL-001',
       sellerId: seller.id,
       codAmount: 1500.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'CREATED',
       companyId: company.id,
+      carrier: 'ST_COURIER',
     },
   });
 
@@ -124,12 +127,14 @@ async function main() {
   const parcel2 = await prisma.parcel.create({
     data: {
       id: 'PRCL-002',
+      trackingNumber: 'PRCL-002',
       sellerId: seller.id,
       codAmount: 2000.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'COD_COLLECTED',
       companyId: company.id,
+      carrier: 'ST_COURIER',
     },
   });
   await prisma.ledgerEvent.create({
@@ -149,12 +154,14 @@ async function main() {
   const parcel3 = await prisma.parcel.create({
     data: {
       id: 'PRCL-003',
+      trackingNumber: 'PRCL-003',
       sellerId: seller.id,
       codAmount: 850.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'COD_COLLECTED',
       companyId: company.id,
+      carrier: 'ST_COURIER',
     },
   });
   await prisma.ledgerEvent.create({
@@ -184,12 +191,14 @@ async function main() {
   const parcel4 = await prisma.parcel.create({
     data: {
       id: 'PRCL-004',
+      trackingNumber: 'PRCL-004',
       sellerId: seller.id,
       codAmount: 1200.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'DISCREPANCY_FLAGGED',
       companyId: company.id,
+      carrier: 'ST_COURIER',
     },
   });
   await prisma.ledgerEvent.create({
@@ -230,12 +239,14 @@ async function main() {
   const parcel5 = await prisma.parcel.create({
     data: {
       id: 'PRCL-005',
+      trackingNumber: 'PRCL-005',
       sellerId: seller.id,
       codAmount: 3500.00,
       originLocationId: originBranch.id,
       destinationLocationId: destBranch.id,
       currentState: 'SETTLED_TO_SELLER',
       companyId: company.id,
+      carrier: 'ST_COURIER',
     },
   });
   await prisma.ledgerEvent.create({

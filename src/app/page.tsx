@@ -89,7 +89,7 @@ export default function FindMeApp() {
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [isAdminLoading, setIsAdminLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'parcels' | 'settlements' | 'profile' | 'admin' | 'discrepancies'>('parcels');
+  const [activeTab, setActiveTab] = useState<'parcels' | 'settlements' | 'profile' | 'admin' | 'discrepancies' | 'scan'>('parcels');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -101,6 +101,19 @@ export default function FindMeApp() {
   const [actionTargetUser, setActionTargetUser] = useState('');
   const [discrepancyResolveNote, setDiscrepancyResolveNote] = useState('');
   const [discrepancyResolveAmount, setDiscrepancyResolveAmount] = useState('');
+
+  // Scanning flow states
+  const [scanImportInfo, setScanImportInfo] = useState<{ id: string; carrier: string; confidence: number } | null>(null);
+  const [duplicateFoundInfo, setDuplicateFoundInfo] = useState<any | null>(null);
+  const [importStep, setImportStep] = useState<'idle' | 'saving' | 'ledger' | 'done'>('idle');
+  const [importFields, setImportFields] = useState({
+    sellerId: '',
+    codAmount: '',
+    originId: '',
+    destId: '',
+    photoUrl: '',
+  });
+
   const [resolvingParcelId, setResolvingParcelId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -132,6 +145,18 @@ export default function FindMeApp() {
       const data = await res.json();
       if (data.user) {
         setUser(data.user);
+        
+        // Scopes role defaults
+        if (data.user.role === 'ADMIN') {
+          setActiveTab('admin');
+        } else if (data.user.role === 'BRANCH_STAFF') {
+          setActiveTab('scan');
+        } else if (data.user.role === 'FINANCE_OFFICER') {
+          setActiveTab('settlements');
+        } else {
+          setActiveTab('parcels');
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
         const scanId = urlParams.get('scan');
         if (scanId) {
@@ -189,6 +214,50 @@ export default function FindMeApp() {
       setUser(null); setParcels([]); setSelectedParcelId(null); setActiveTab('parcels'); setAdminStats(null);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanImportInfo) return;
+    
+    setImportStep('saving');
+    try {
+      const res = await fetch('/api/parcels/import-consignment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          trackingNumber: scanImportInfo.id,
+          carrier: scanImportInfo.carrier,
+          sellerId: importFields.sellerId,
+          codAmount: parseFloat(importFields.codAmount),
+          originLocationId: importFields.originId,
+          destinationLocationId: importFields.destId,
+          photoUrl: importFields.photoUrl || undefined,
+        }),
+      });
+
+      setImportStep('ledger');
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setImportStep('done');
+        setTimeout(() => {
+          setScanImportInfo(null);
+          setImportStep('idle');
+          setImportFields({ sellerId: '', codAmount: '', originId: '', destId: '', photoUrl: '' });
+          loadData();
+        }, 1200);
+      } else {
+        alert(data.error?.message || 'Failed to import consignment.');
+        setImportStep('idle');
+      }
+    } catch (err: any) {
+      alert('Network error: ' + err.message);
+      setImportStep('idle');
     }
   };
 
@@ -502,6 +571,28 @@ export default function FindMeApp() {
       {/* Main Scrollable Content */}
       <main className="flex-1 overflow-y-auto pb-24 relative">
         
+        {/* SCAN TAB — Consignment Scanner Dashboard */}
+        {activeTab === 'scan' && (
+          <div className="absolute inset-0 bg-slate-900 z-40">
+            <QRScanner
+              onImportNeeded={(id, carrier, confidence) => {
+                setScanImportInfo({ id, carrier, confidence });
+                setImportFields({
+                  sellerId: metadata.users.find(u => u.role === 'SELLER')?.id || '',
+                  codAmount: '1500',
+                  originId: metadata.locations.find(l => l.type === 'BRANCH')?.id || '',
+                  destId: metadata.locations.find(l => l.type === 'BRANCH')?.id || '',
+                  photoUrl: 'https://images.unsplash.com/photo-1557200134-90327ee9fafa?w=500',
+                });
+              }}
+              onExistingFound={(parcel) => {
+                setDuplicateFoundInfo(parcel);
+              }}
+              onClose={() => setActiveTab('parcels')}
+            />
+          </div>
+        )}
+
         {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className="p-5 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -531,9 +622,9 @@ export default function FindMeApp() {
             <div className="flex items-center justify-between px-1">
               <h3 className="text-[13px] font-bold text-slate-800">Active Parcels</h3>
               <div className="flex items-center gap-2">
-                {(user?.role === 'SELLER' || user?.role === 'ADMIN') && (
-                  <button onClick={() => router.push('/import')} className="text-blue-600 hover:text-blue-800 text-[10px] font-bold flex items-center gap-1 bg-blue-50 border border-blue-100 rounded-lg px-2 py-0.5 active:scale-95 transition-all">
-                    <Upload className="w-3 h-3" /> Bulk CSV
+                {(user?.role === 'BRANCH_STAFF' || user?.role === 'ADMIN') && (
+                  <button onClick={() => setActiveTab('scan')} className="text-blue-600 hover:text-blue-800 text-[10px] font-bold flex items-center gap-1 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1 active:scale-95 transition-all shadow-sm">
+                    <Camera className="w-3 h-3" /> + Scan Consignment
                   </button>
                 )}
                 {!isDataLoading && (
@@ -946,6 +1037,15 @@ export default function FindMeApp() {
           <Package className="w-5 h-5 mb-1" />
           <span className="text-[10px] font-semibold">Parcels</span>
         </button>
+        {(user?.role === 'BRANCH_STAFF' || user?.role === 'ADMIN') && (
+          <button 
+            onClick={() => setActiveTab('scan')}
+            className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'scan' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Camera className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-semibold">Scan</span>
+          </button>
+        )}
         <button 
           onClick={() => setActiveTab('settlements')}
           className={`flex flex-col items-center p-2 min-w-[56px] transition-colors ${activeTab === 'settlements' ? 'text-[var(--color-primary)]' : 'text-slate-400 hover:text-slate-600'}`}
@@ -1128,14 +1228,188 @@ export default function FindMeApp() {
             </div>
           </>
         )}
-      {isScannerOpen && (
-        <QRScanner
-          onScan={(scannedId) => {
-            setIsScannerOpen(false);
-            setSelectedParcelId(scannedId);
-          }}
-          onClose={() => setIsScannerOpen(false)}
-        />
+      {/* CREATE CONSIGNMENT IMPORT WIZARD */}
+      {scanImportInfo && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">New Consignment Scanned</span>
+                <h3 className="font-mono font-bold text-slate-900 text-sm">{scanImportInfo.id}</h3>
+              </div>
+              <button onClick={() => setScanImportInfo(null)} className="p-1.5 rounded-full bg-slate-100 text-slate-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Carrier rule info panel */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 flex justify-between items-center text-xs">
+              <div>
+                <span className="text-[9px] font-extrabold text-blue-500 uppercase tracking-widest block">Detected Carrier</span>
+                <span className="font-bold text-blue-900">{scanImportInfo.carrier.replace('_', ' ')}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] font-extrabold text-blue-500 uppercase tracking-widest block">Confidence</span>
+                <span className="font-bold text-emerald-600 font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{scanImportInfo.confidence}%</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleImportSubmit} className="space-y-3.5">
+              <div>
+                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Select Seller</label>
+                <select
+                  required
+                  value={importFields.sellerId}
+                  onChange={e => setImportFields({ ...importFields, sellerId: e.target.value })}
+                  className="w-full bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                >
+                  {metadata.users.filter(u => u.role === 'SELLER').map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">COD Amount (₹)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="e.g. 1500"
+                  value={importFields.codAmount}
+                  onChange={e => setImportFields({ ...importFields, codAmount: e.target.value })}
+                  className="w-full bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Origin</label>
+                  <select
+                    value={importFields.originId}
+                    onChange={e => setImportFields({ ...importFields, originId: e.target.value })}
+                    className="w-full bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {metadata.locations.map(l => (
+                      <option key={l.id} value={l.id}>{l.name.split(' ')[0]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Destination</label>
+                  <select
+                    value={importFields.destId}
+                    onChange={e => setImportFields({ ...importFields, destId: e.target.value })}
+                    className="w-full bg-slate-50 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {metadata.locations.map(l => (
+                      <option key={l.id} value={l.id}>{l.name.split(' ')[0]}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Receipt photo preview */}
+              <div className="border border-dashed border-slate-200 rounded-2xl p-3 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <Image className="w-5 h-5 text-slate-400" />
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-700 block">Receipt Attachment</span>
+                    <span className="text-[8px] text-emerald-600 font-semibold block">✓ Captured (Mock)</span>
+                  </div>
+                </div>
+                <img src={importFields.photoUrl} alt="Receipt preview" className="w-10 h-10 object-cover rounded-lg border" />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-xs active:scale-[0.98] transition-transform shadow-md shadow-blue-500/10"
+              >
+                Import Parcel
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DUPLICATE FOUND PREVIEW CARD */}
+      {duplicateFoundInfo && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                <span className="font-extrabold text-xs uppercase tracking-wider text-slate-800">Parcel Already Exists</span>
+              </div>
+              <button onClick={() => setDuplicateFoundInfo(null)} className="p-1.5 rounded-full bg-slate-100 text-slate-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 font-medium">Tracking No:</span>
+                <span className="font-mono font-bold text-slate-800">{duplicateFoundInfo.id}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 font-medium">Current Status:</span>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${getBadgeStyle(duplicateFoundInfo.currentState)}`}>
+                  {getFriendlyState(duplicateFoundInfo.currentState)}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 font-medium">COD Amount:</span>
+                <span className="font-bold text-slate-800">₹{Number(duplicateFoundInfo.codAmount).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                const id = duplicateFoundInfo.id;
+                setDuplicateFoundInfo(null);
+                setActiveTab('parcels');
+                setSelectedParcelId(id);
+              }}
+              className="w-full bg-[var(--color-primary)] hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-xs active:scale-[0.98] transition-transform"
+            >
+              Open Parcel Details
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP-BY-STEP PROGRESS INDICATOR */}
+      {importStep !== 'idle' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur flex items-center justify-center p-6">
+          <div className="bg-slate-850 border border-slate-800 rounded-3xl p-6 w-full max-w-xs space-y-6 text-white text-center">
+            <div>
+              <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
+              <h3 className="font-bold text-sm">Processing Import...</h3>
+            </div>
+            
+            <div className="space-y-3.5 text-left text-xs font-semibold px-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${importStep !== 'saving' ? 'bg-emerald-500 text-white' : 'bg-blue-500/10 border border-blue-500/30 text-blue-400 animate-pulse'}`}>
+                  {importStep !== 'saving' ? '✓' : '1'}
+                </div>
+                <span className={importStep !== 'saving' ? 'text-slate-400' : 'text-white'}>Saving Consignment...</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${importStep === 'done' ? 'bg-emerald-500 text-white' : importStep === 'ledger' ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400 animate-pulse' : 'bg-slate-800 text-slate-600'}`}>
+                  {importStep === 'done' ? '✓' : '2'}
+                </div>
+                <span className={importStep === 'done' ? 'text-slate-400' : importStep === 'ledger' ? 'text-white' : 'text-slate-600'}>Ledger Auditing...</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${importStep === 'done' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-600'}`}>
+                  {importStep === 'done' ? '✓' : '3'}
+                </div>
+                <span className={importStep === 'done' ? 'text-white font-bold' : 'text-slate-600'}>Completed</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
