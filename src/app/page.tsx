@@ -1362,17 +1362,55 @@ export default function FindMeApp() {
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                const id = duplicateFoundInfo.id;
-                setDuplicateFoundInfo(null);
-                setActiveTab('parcels');
-                setSelectedParcelId(id);
-              }}
-              className="w-full bg-[var(--color-primary)] hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-xs active:scale-[0.98] transition-transform"
-            >
-              Open Parcel Details
-            </button>
+            <div className="space-y-2">
+              {user?.role === 'DELIVERY_AGENT' && duplicateFoundInfo.currentState === 'CREATED' && (
+                <button
+                  onClick={async () => {
+                    const id = duplicateFoundInfo.id;
+                    setDuplicateFoundInfo(null);
+                    setImportStep('saving');
+                    await handleCollect(id, Number(duplicateFoundInfo.codAmount));
+                    setImportStep('done');
+                    setTimeout(() => {
+                      setImportStep('idle');
+                    }, 1200);
+                  }}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl text-xs active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <DollarSign className="w-4 h-4" /> Collect ₹{Number(duplicateFoundInfo.codAmount)}
+                </button>
+              )}
+
+              {user?.role === 'BRANCH_STAFF' && duplicateFoundInfo.currentState === 'COD_COLLECTED' && (
+                <button
+                  onClick={async () => {
+                    const id = duplicateFoundInfo.id;
+                    setDuplicateFoundInfo(null);
+                    setImportStep('saving');
+                    await handleHandoverConfirm(id, Number(duplicateFoundInfo.codAmount));
+                    setImportStep('done');
+                    setTimeout(() => {
+                      setImportStep('idle');
+                    }, 1200);
+                  }}
+                  className="w-full bg-[var(--color-primary)] hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-xs active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" /> Accept Handover
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  const id = duplicateFoundInfo.id;
+                  setDuplicateFoundInfo(null);
+                  setActiveTab('parcels');
+                  setSelectedParcelId(id);
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs active:scale-[0.98] transition-transform"
+              >
+                Open Timeline Details
+              </button>
+            </div>
           </div>
         </div>
       )}

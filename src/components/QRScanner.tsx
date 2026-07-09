@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { Camera, X, RefreshCw, Key, Image, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { Camera, X, RefreshCw, Key, Image, Check, AlertCircle, Sparkles, Wifi, WifiOff } from 'lucide-react';
 
 interface ScanItem {
   trackingId: string;
   carrier: string;
-  status: 'Imported' | 'Already Exists' | 'Pending Setup';
+  status: 'Imported' | 'Already Exists' | 'Pending Setup' | 'Pending Sync';
   time: string;
   type: 'Barcode' | 'QR' | 'Manual';
 }
@@ -25,6 +25,7 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
   const [scanHistory, setScanHistory] = useState<ScanItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isOnline, setIsOnline] = useState(true);
 
   // Camera fields
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -32,16 +33,104 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
   const animationFrameId = useRef<number | null>(null);
   const activeStream = useRef<MediaStream | null>(null);
 
-  // Load user scan history from sessionStorage to keep it persistent for the session
+  // Monitor network connection and persistent scan lists
   useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const saved = sessionStorage.getItem('findme_scans_today');
     if (saved) setScanHistory(JSON.parse(saved));
+
+    // Try auto-syncing on mount if online
+    if (navigator.onLine) {
+      syncOfflineQueue();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      stopCamera();
+    };
   }, []);
 
   const addHistoryItem = (item: ScanItem) => {
-    const updated = [item, ...scanHistory].slice(0, 5);
-    setScanHistory(updated);
-    sessionStorage.setItem('findme_scans_today', JSON.stringify(updated));
+    setScanHistory(prev => {
+      const updated = [item, ...prev].slice(0, 5);
+      sessionStorage.setItem('findme_scans_today', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const syncOfflineQueue = async () => {
+    const queueStr = localStorage.getItem('findme_offline_queue');
+    if (!queueStr) return;
+
+    const queue: { trackingId: string; carrier: string; time: string; type: any }[] = JSON.parse(queueStr);
+    if (queue.length === 0) return;
+
+    console.log(`[Sync Queue] Attempting to sync ${queue.length} offline scans...`);
+    
+    const token = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+    
+    // Process items sequentially
+    for (const item of queue) {
+      try {
+        // Retrieve default branch details for manual imports
+        const metaRes = await fetch('/api/metadata');
+        const meta = await metaRes.json();
+        const sellerId = meta.users?.find((u: any) => u.role === 'SELLER')?.id || '';
+        const originId = meta.locations?.find((l: any) => l.type === 'BRANCH')?.id || '';
+        const destId = meta.locations?.find((l: any) => l.type === 'BRANCH')?.id || '';
+
+        const res = await fetch('/api/parcels/import-consignment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': token,
+          },
+          body: JSON.stringify({
+            trackingNumber: item.trackingId,
+            carrier: item.carrier,
+            sellerId,
+            codAmount: 1500, // Default mock COD
+            originLocationId: originId,
+            destinationLocationId: destId,
+          }),
+        });
+
+        const data = await res.json();
+        
+        // Update history status in state
+        setScanHistory(prev => {
+          const updated = prev.map(hist => {
+            if (hist.trackingId === item.trackingId) {
+              return {
+                ...hist,
+                status: data.success ? ('Imported' as const) : ('Already Exists' as const),
+              };
+            }
+            return hist;
+          });
+          sessionStorage.setItem('findme_scans_today', JSON.stringify(updated));
+          return updated;
+        });
+
+      } catch (err) {
+        console.error('Failed to sync offline item:', item.trackingId, err);
+      }
+    }
+
+    localStorage.removeItem('findme_offline_queue');
   };
 
   const stopCamera = () => {
@@ -82,42 +171,60 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
   // Rule-based Carrier Detector
   const detectCarrier = (code: string) => {
     const trackingStr = code.trim().toUpperCase();
-    
-    // ST Courier pattern (11-digit numbers starting with 639)
     if (/^639\d{8}$/.test(trackingStr)) {
       return { carrier: 'ST_COURIER', confidence: 99 };
     }
-    
-    // DTDC Pattern (starts with D or T followed by 9 digits)
     if (/^[DT]\d{9}$/.test(trackingStr)) {
       return { carrier: 'DTDC', confidence: 95 };
     }
-
-    // Professional Courier Pattern (starts with P followed by 8 digits)
     if (/^P\d{8}$/.test(trackingStr)) {
       return { carrier: 'PROFESSIONAL_COURIER', confidence: 90 };
     }
-
-    // Default Fallback
     return { carrier: 'ST_COURIER', confidence: 60 };
   };
 
   const processScannedCode = async (code: string, type: 'Barcode' | 'QR' | 'Manual') => {
     stopCamera();
     setViewMode('menu');
-    setLoading(true);
 
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Handle offline caching logic
+    if (!isOnline) {
+      const { carrier } = detectCarrier(code);
+      
+      // Add to local storage queue
+      const queueStr = localStorage.getItem('findme_offline_queue') || '[]';
+      const queue = JSON.parse(queueStr);
+      queue.push({ trackingId: code, carrier, time: timestamp, type });
+      localStorage.setItem('findme_offline_queue', JSON.stringify(queue));
+
+      addHistoryItem({
+        trackingId: code,
+        carrier,
+        status: 'Pending Sync',
+        time: timestamp,
+        type,
+      });
+
+      setErrorMsg('Device is offline. Consignment saved to sync queue.');
+      
+      // Auto-resume camera viewfinder loops after 1.5s
+      setTimeout(() => {
+        setErrorMsg('');
+        startCamera(scanType);
+      }, 1500);
+      return;
+    }
+
+    setLoading(true);
     try {
-      // 1. Search database to check if parcel exists
       const res = await fetch(`/api/parcels`);
       const result = await res.json();
       const parcels = result.data || [];
       const found = parcels.find((p: any) => p.trackingNumber === code || p.id === code);
 
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
       if (found) {
-        // Handle Already Exists
         addHistoryItem({
           trackingId: code,
           carrier: found.carrier || 'ST_COURIER',
@@ -127,7 +234,6 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
         });
         onExistingFound(found);
       } else {
-        // Handle New Import
         const { carrier, confidence } = detectCarrier(code);
         addHistoryItem({
           trackingId: code,
@@ -164,7 +270,6 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
       });
 
       if (code && code.data) {
-        // Successfully read
         processScannedCode(code.data, 'QR');
         return;
       }
@@ -181,9 +286,9 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden shadow-2xl border-x border-slate-200">
+    <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col justify-between p-0">
       
-      {/* Scanner Dashboard view */}
+      {/* Menu / Landing dashboard */}
       {viewMode === 'menu' && (
         <div className="flex-1 flex flex-col justify-between p-5 bg-slate-900 text-white">
           <div>
@@ -192,18 +297,31 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
                 <Sparkles className="w-5 h-5 text-blue-500" />
                 <span className="font-black text-sm uppercase tracking-wider">Scan Consignment</span>
               </div>
-              <button onClick={onClose} className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                {isOnline ? (
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    <Wifi className="w-3 h-3" /> Online
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <WifiOff className="w-3 h-3" /> Offline
+                  </div>
+                )}
+                <button onClick={onClose} className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {errorMsg && (
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold p-3 rounded-xl mt-4">
+              <div className={`border p-3 rounded-xl mt-4 text-[11px] font-bold ${
+                !isOnline ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}>
                 {errorMsg}
               </div>
             )}
 
-            {/* Menu options buttons */}
+            {/* Actions Grid */}
             <div className="grid grid-cols-2 gap-4 mt-6">
               <button
                 onClick={() => startCamera('barcode')}
@@ -233,7 +351,7 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
               <Key className="w-4 h-4 text-slate-400" /> Enter Tracking Number
             </button>
 
-            {/* Today's Scans list */}
+            {/* Scan history logs */}
             <div className="mt-8">
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block mb-4">Today's Scans</span>
               
@@ -255,6 +373,7 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
                           item.status === 'Imported' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                           item.status === 'Already Exists' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                          item.status === 'Pending Sync' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' :
                           'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                         }`}>
                           {item.status}
@@ -304,7 +423,7 @@ export default function QRScanner({ onImportNeeded, onExistingFound, onClose }: 
         </div>
       )}
 
-      {/* Manual Input view */}
+      {/* Manual input */}
       {viewMode === 'manual' && (
         <div className="flex-1 flex flex-col justify-between p-5 bg-slate-900 text-white">
           <div className="space-y-6">
